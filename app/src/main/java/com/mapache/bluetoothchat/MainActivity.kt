@@ -14,16 +14,20 @@ import android.os.Bundle
 import android.os.Handler
 import android.view.View
 import android.widget.*
+import androidx.lifecycle.Observer
+import androidx.lifecycle.ViewModelProviders
+import androidx.recyclerview.widget.LinearLayoutManager
 import com.example.bluetooth.OnlineChat
-import com.example.bluetooth.UtilClass
+import com.example.bluetooth.constantes
+import com.mapache.bluetoothchat.adapters.adapterMensajes
+import com.mapache.bluetoothchat.database.viewModel.viewModel
 import kotlinx.android.synthetic.main.activity_main.*
+import java.util.*
 
 class MainActivity : AppCompatActivity() {
 
     var bluetoothAdapter: BluetoothAdapter? = null
     lateinit var dialog: Dialog
-    lateinit var chatAdapter: ArrayAdapter<String>
-    lateinit var chatMessages: ArrayList<String>
 
 
     private val REQUEST_ENABLE_BLUETOOTH = 1
@@ -31,66 +35,84 @@ class MainActivity : AppCompatActivity() {
     lateinit var discoveredDevicesAdapter: ArrayAdapter<String>
     var chatController: OnlineChat? = null
 
+    private lateinit var viewModel : viewModel
+
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
-        findViewsByIds()
 
         btn_username.setOnClickListener {
             tv_username.text = ed_username.text.toString()
-            ed_username.setText("Hola")
+            ed_username.setText("")
         }
 
-        //TODO: check device support bluetooth or not
+        btn_enviar.setOnClickListener {
+            if (tv_username.text.toString() != "Username"){
+                findViewsByIds()
+            } else{
+                Toast.makeText(this, "Debe ingresar un usuario", Toast.LENGTH_SHORT).show()
+            }
+        }
+
         bluetoothAdapter = BluetoothAdapter.getDefaultAdapter()
         if (bluetoothAdapter == null) {
-            Toast.makeText(this, "El Bluetooth no está disponible", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, "Bluetooth no disponible!!!", Toast.LENGTH_SHORT).show()
             finish()
         }
-        //TODO: show bluetooth devices dialog when click connect button
+
         btn_conexion.setOnClickListener { showPrinterPickDialog() }
 
-        //TODO: set chat adapter
-        chatMessages = ArrayList()
-        chatAdapter = ArrayAdapter(this, android.R.layout.simple_list_item_1, chatMessages)
-        list.adapter = chatAdapter
+        viewModel = ViewModelProviders.of(this).get(com.mapache.bluetoothchat.database.viewModel.viewModel::class.java)
+
+        var adapter = adapterMensajes(emptyList())
+
+        rv_mensajes.adapter = adapter
+        rv_mensajes.layoutManager = LinearLayoutManager(this)
+
+        viewModel.getAll().observe(this, Observer { mensajes ->
+            mensajes?.let {
+                adapter.setMensaje(it)
+            }
+        })
     }
 
     //En este metodo se envian y se escriben los mensajes, al igual que se hace la coneccion con el dispositivo
     private val handler = Handler(Handler.Callback { msg ->
         when (msg.what) {
-            UtilClass.MESSAGE_STATE_CHANGE -> when (msg.arg1) {
-                UtilClass.STATE_CONNECTED -> {
+            constantes.MESSAGE_STATE_CHANGE -> when (msg.arg1) {
+                constantes.STATE_CONNECTED -> {
                     setStatus("Conectado a: " + connectingDevice.name)
                     btn_conexion.isEnabled = false
                 }
-                UtilClass.STATE_CONNECTING -> {
+                constantes.STATE_CONNECTING -> {
                     setStatus("Conectando")
                     btn_conexion.isEnabled = false
                 }
-                UtilClass.STATE_LISTEN, PlaybackState.STATE_NONE -> setStatus("Desconectado")
+                constantes.STATE_LISTEN, PlaybackState.STATE_NONE -> setStatus("Desconectado")
             }
-            UtilClass.MESSAGE_WRITE -> {
+            constantes.MESSAGE_WRITE -> {
                 val writeBuf = msg.obj as ByteArray
 
                 val writeMessage = String(writeBuf)
-                chatMessages.add("Me: $writeMessage")
-                chatAdapter.notifyDataSetChanged()
+
+                var time = Calendar.getInstance().time.hours.toString() + ":" + Calendar.getInstance().time.minutes.toString()
+                viewModel.insertMessage(com.mapache.bluetoothchat.database.entities.Message(0, "1", writeMessage, time))
             }
-            UtilClass.MESSAGE_READ -> {
+            constantes.MESSAGE_READ -> {
                 val readBuf = msg.obj as ByteArray
 
                 val readMessage = String(readBuf, 0, msg.arg1)
-                chatMessages.add(connectingDevice.name + ":  " + readMessage)
-                chatAdapter.notifyDataSetChanged()
+
+                var time = Calendar.getInstance().time.hours.toString() + ":" + Calendar.getInstance().time.minutes.toString()
+                viewModel.insertMessage(com.mapache.bluetoothchat.database.entities.Message(0, "2", readMessage, time))
             }
-            UtilClass.MESSAGE_DEVICE_OBJECT -> {
-                connectingDevice = msg.data.getParcelable(UtilClass.DEVICE_OBJECT)!!
+            constantes.MESSAGE_DEVICE_OBJECT -> {
+                connectingDevice = msg.data.getParcelable(constantes.DEVICE_OBJECT)!!
                 Toast.makeText(applicationContext, "Conectado a" + connectingDevice.name,
                         Toast.LENGTH_SHORT).show()
             }
-            UtilClass.MESSAGE_TOAST -> Toast.makeText(applicationContext, msg.getData().getString("toast"),
+            constantes.MESSAGE_TOAST -> Toast.makeText(applicationContext, msg.getData().getString("toast"),
                     Toast.LENGTH_SHORT).show()
         }
         false
@@ -122,8 +144,6 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onStart() {
-
-        //TODO: Checking if BLUETOOTH is enabled when we launch the activity
         super.onStart()
         if (bluetoothAdapter == null) {
             Toast.makeText(this, "El Bluetooth no está disponible", Toast.LENGTH_SHORT).show()
@@ -151,8 +171,7 @@ class MainActivity : AppCompatActivity() {
                 if (ed_mensaje.text.toString() == "") {
                     Toast.makeText(this@MainActivity, "Escribe un mensaje", Toast.LENGTH_SHORT).show()
                 } else {
-                    //TODO: here
-                    sendMessage(ed_mensaje.text.toString())
+                    sendMessage(tv_username.text.toString() + ": " + ed_mensaje.text.toString())
                     ed_mensaje.setText("")
                 }
             }
@@ -169,28 +188,23 @@ class MainActivity : AppCompatActivity() {
         }
         bluetoothAdapter!!.startDiscovery()
 
-        //TODO: Initializing bluetooth adapters
         val pairedDevicesAdapter = ArrayAdapter<String>(this, android.R.layout.simple_list_item_1)
         discoveredDevicesAdapter = ArrayAdapter(this, android.R.layout.simple_list_item_1)
 
-        //TODO: locate listviews and attatch the adapters
         val listView = dialog.findViewById(R.id.pairedDeviceList) as ListView
         val listView2 = dialog.findViewById(R.id.discoveredDeviceList) as ListView
         listView.adapter = pairedDevicesAdapter
         listView2.adapter = discoveredDevicesAdapter
 
-        //TODO:  Register for broadcasts when a device is discovered
         var filter = IntentFilter(BluetoothDevice.ACTION_FOUND)
         registerReceiver(discoveryFinishReceiver, filter)
 
-        //TODO:  Register for broadcasts when discovery has finished
         filter = IntentFilter(BluetoothAdapter.ACTION_DISCOVERY_FINISHED)
         registerReceiver(discoveryFinishReceiver, filter)
 
         bluetoothAdapter = BluetoothAdapter.getDefaultAdapter()
         val pairedDevices = bluetoothAdapter!!.bondedDevices
 
-        //TODO:  If there are paired devices, add each one to the ArrayAdapter
         if (pairedDevices.size > 0) {
             for (device in pairedDevices) {
                 pairedDevicesAdapter.add(device.name + "\n" + device.address)
@@ -198,8 +212,7 @@ class MainActivity : AppCompatActivity() {
         } else {
             pairedDevicesAdapter.add("No se emparejó a ningún dispositivo")
         }
-
-        //TODO: Handling listview item click event
+        0
         listView.onItemClickListener = AdapterView.OnItemClickListener { _, view, _, _ ->
             bluetoothAdapter!!.cancelDiscovery()
             val info = (view as TextView).text.toString()
@@ -248,8 +261,9 @@ class MainActivity : AppCompatActivity() {
 
     //Aqui se envia el mensaje si es que esta disponible la conexion
     private fun sendMessage(message: String) {
-        if (chatController!!.getState() != UtilClass.STATE_CONNECTED) {
+        if (chatController!!.getState() != constantes.STATE_CONNECTED) {
             Toast.makeText(this, "Se perdió la conexión", Toast.LENGTH_SHORT).show()
+            btn_conexion.isEnabled = true
             return
         }
 

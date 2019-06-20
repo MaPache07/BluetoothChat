@@ -66,16 +66,28 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_below="@id/btn_username"
-        android:padding="8dp"
+        android:textSize="20dp"
+        android:fontFamily="sans-serif-black"
+        android:layout_centerHorizontal="true"
+        android:padding="16dp"
         android:text="Username"/>
 
     <ListView
         android:id="@+id/list"
         android:layout_width="match_parent"
         android:layout_below="@id/tv_username"
-        android:layout_height="300dp"></ListView>
+        android:layout_height="300dp"
+    android:visibility="gone"></ListView>
+
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/rv_mensajes"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_below="@id/tv_username"
+        android:layout_above="@id/enviar"/>
 
     <LinearLayout
+        android:id="@+id/enviar"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"

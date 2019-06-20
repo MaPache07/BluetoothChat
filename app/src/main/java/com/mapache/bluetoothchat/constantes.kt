@@ -1,6 +1,6 @@
 package com.example.bluetooth
 
-class UtilClass {
+class constantes {
     companion object{
         val MESSAGE_STATE_CHANGE = 1
         val MESSAGE_READ = 2
